@@ -1,4 +1,6 @@
-# HTTP/HTTPS过滤代理
+# FILTER PROXY
+
+HTTP/HTTPS过滤代理
 
 这是一个功能强大的HTTP/HTTPS代理服务器，具有灵活的过滤功能，可以根据规则选择性地丢弃或允许特定请求。
 
