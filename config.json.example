@@ -3,6 +3,7 @@
   "proxy_port": 22223,
   "rpc_host": "0.0.0.0",
   "rpc_port": 22224,
+  "max_connections": 1024,
   "filter_rules": [
     {
       "type": "allow",

@@ -20,6 +20,7 @@ PROXY_HOST = '0.0.0.0'  # 监听所有网络接口
 PROXY_PORT = 22223      # 默认监听端口
 RPC_HOST = '0.0.0.0'  # RPC监听所有网络接口
 RPC_PORT = 22224      # RPC端口
+MAX_CONNECTIONS = 1024 # 最大连接数
 
 # 代理控制变量
 FILTER_ENABLED = False
@@ -59,6 +60,7 @@ def load_config():
             PROXY_PORT = config.get('proxy_port', PROXY_PORT)
             RPC_HOST = config.get('rpc_host', RPC_HOST)
             RPC_PORT = config.get('rpc_port', RPC_PORT)
+            MAX_CONNECTIONS = config.get('max_connections', MAX_CONNECTIONS)
             
             # 加载过滤规则
             if 'filter_rules' in config and isinstance(config['filter_rules'], list):
@@ -84,18 +86,9 @@ def load_config():
                     FILTER_RULES = loaded_rules
     except Exception as e:
         info_log(f"Unexpected error loading config: {e}. Using default settings.")
-        # 确保始终有默认的RPC访问规则
-        has_rpc_rule = False
-        for rule in FILTER_RULES:
-            if rule['type'] == 'allow' and rule['port'] == RPC_PORT:
-                has_rpc_rule = True
-                break
-        if not has_rpc_rule:
-            FILTER_RULES.append({"type": "allow", "host_pattern": r"(localhost|127\.0\.0\.1)", "port": RPC_PORT, "priority": 999})
 
 # 缓冲区大小
 BUFFER_SIZE = 8192
-MAX_CONNECTIONS = 100
 
 # 检测回环请求的函数
 def is_loopback_request(host, port):
