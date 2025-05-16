@@ -4,6 +4,8 @@ HTTP/HTTPS过滤代理
 
 这是一个功能强大的HTTP/HTTPS代理服务器，具有灵活的过滤功能，可以根据规则选择性地丢弃或允许特定请求。
 
+**注意** 该服务器仍在开发阶段，不建议用于生产环境部署！
+
 ## 功能特点
 
 - 支持HTTP和HTTPS协议代理
@@ -41,11 +43,19 @@ HTTP/HTTPS过滤代理
 4. 设置环境变量（可选）：
    ```
    # 启用调试输出
-   DEBUG=true python3 server.py
+   DEBUG=true python server.py
    
    # 指定不同的配置文件
-   CONFIG_FILE=custom_config.json python3 server.py
+   CONFIG_FILE=custom_config.json python server.py
    ```
+
+### Docker
+
+支持使用Docker镜像快速部署。
+
+```bash
+docker run --name filter-proxy -p 22223:22223 -p 22224:22224 -d ghcr.io/chenxiex/filter-proxy
+```
 
 ## 过滤规则说明
 

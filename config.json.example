@@ -17,14 +17,14 @@
       "host_pattern": ".*\\.example\\.com",
       "port": 0,
       "priority": 50,
-      "description": "允许访问所有example.com域名"
+      "description": "允许访问所有example.com域名。仅作为示例，在默认配置中不存在"
     },
     {
       "type": "deny",
       "host_pattern": ".*\\.example\\.com",
       "port": 0,
       "priority": 20,
-      "description": "阻止访问example.com域名"
+      "description": "阻止访问example.com域名。仅作为示例，在默认配置中不存在"
     },
     {
       "type": "deny",
