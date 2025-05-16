@@ -1,0 +1,36 @@
+{
+  "proxy_host": "0.0.0.0",
+  "proxy_port": 22223,
+  "rpc_host": "0.0.0.0",
+  "rpc_port": 22224,
+  "filter_rules": [
+    {
+      "type": "allow",
+      "host_pattern": "(localhost|127\\.0\\.0\\.1)",
+      "port": 22224,
+      "priority": 100,
+      "description": "允许访问RPC服务器，移除该过滤规则可能导致过滤开启后无法关闭"
+    },
+    {
+      "type": "allow",
+      "host_pattern": ".*\\.example\\.com",
+      "port": 0,
+      "priority": 50,
+      "description": "允许访问所有example.com域名"
+    },
+    {
+      "type": "deny",
+      "host_pattern": ".*\\.example\\.com",
+      "port": 0,
+      "priority": 20,
+      "description": "阻止访问example.com域名"
+    },
+    {
+      "type": "deny",
+      "host_pattern": ".*",
+      "port": 0,
+      "priority": 0,
+      "description": "默认规则：阻止所有其他请求"
+    }
+  ]
+}
