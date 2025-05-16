@@ -51,7 +51,7 @@ def info_log(message):
 
 # 读取配置文件
 def load_config():
-    global CONFIG_FILE, PROXY_HOST, PROXY_PORT, RPC_HOST, RPC_PORT, FILTER_RULES
+    global CONFIG_FILE, PROXY_HOST, PROXY_PORT, RPC_HOST, RPC_PORT, FILTER_RULES, MAX_CONNECTIONS
     try:
         with open(CONFIG_FILE, 'r') as config_file:
             config = json.load(config_file)
