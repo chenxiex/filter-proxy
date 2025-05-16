@@ -9,6 +9,7 @@ import socketserver
 from urllib.parse import parse_qs, urlparse
 import re
 import os
+import signal  # 添加signal模块导入
 
 # 配置文件路径
 CONFIG_FILE = os.getenv('CONFIG_FILE', 'config.json')
@@ -511,6 +512,16 @@ def start_rpc_server():
 def main():
     server_socket = None
     load_config()  # 加载配置文件
+    
+    # 添加信号处理
+    def handle_sigterm(signum, frame):
+        info_log("Received SIGTERM signal. Server is shutting down...")
+        if server_socket is not None:
+            server_socket.close()
+        os._exit(0)
+    
+    # 注册SIGTERM信号处理程序
+    signal.signal(signal.SIGTERM, handle_sigterm)
     
     try:
         # 启动RPC服务器线程
