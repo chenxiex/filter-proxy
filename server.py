@@ -496,24 +496,42 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
         # 使用自定义日志格式
         logging.debug(f"RPC: {self.client_address[0]} - {format % args}")
 
+# 创建全局变量以便在信号处理函数中访问RPC服务器
+rpc_server = None
+
 # 启动RPC服务器
 def start_rpc_server():
+    global rpc_server
     try:
-        rpc_server = socketserver.ThreadingTCPServer((RPC_HOST, RPC_PORT), RPCHandler)
+        class ReusableAddressServer(socketserver.ThreadingTCPServer):
+            allow_reuse_address = True
+        rpc_server = ReusableAddressServer((RPC_HOST, RPC_PORT), RPCHandler)
+        rpc_server.daemon_threads = True
         logging.info(f"RPC server started on {RPC_HOST}:{RPC_PORT}")
         rpc_server.serve_forever()
     except Exception as e:
         logging.error(f"Error starting RPC server: {e}")
 
 def main():
+    global rpc_server
     server_socket = None
     load_config()  # 加载配置文件
     
     # 添加信号处理
     def handle_sigterm(signum, frame):
         logging.info("Received SIGTERM signal. Server is shutting down...")
+        # 关闭主服务器
         if server_socket is not None:
             server_socket.close()
+        
+        # 关闭RPC服务器
+        if rpc_server is not None:
+            logging.info("Shutting down RPC server...")
+            rpc_server.shutdown()
+            rpc_server.server_close()
+            logging.info("RPC server shut down.")
+        
+        logging.info("All servers shut down. Exiting...")
         os._exit(0)
     
     # 注册SIGTERM信号处理程序
