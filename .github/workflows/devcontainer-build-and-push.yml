@@ -1,0 +1,39 @@
+name: Dev Container Build and Push Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - ".devcontainer/**"
+      - ".github/workflows/devcontainer-build-and-push.yml"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/devcontainer
+      
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      packages: write
+
+    steps:
+    - 
+      name: Checkout
+      uses: actions/checkout@v4
+    -
+      name: Login to GitHub Container Registry
+      uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - 
+      name: Pre-build dev container image
+      uses: devcontainers/ci@v0.3
+      with:
+        imageName: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
+        cacheFrom: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
+        push: always

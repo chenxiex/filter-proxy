@@ -27,7 +27,7 @@ def start_https_server(http_host, http_port):
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
     # 加载证书和密钥
-    context.load_cert_chain(certfile='test/example.crt', keyfile="test/example.key")
+    context.load_cert_chain(certfile='test/test.crt', keyfile="test/test.key")
 
     # 创建 HTTP 服务器，并使用 wrap_socket() 方法包装 socket
     httpd = HTTPServer((http_host, http_port), MyRequestHandler)
