@@ -32,6 +32,6 @@ jobs:
         cacheFrom: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
         push: never
         runCmd: |
+          make clean
           make install-all-packages
           make run-test
-          make clean
