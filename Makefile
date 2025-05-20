@@ -17,11 +17,12 @@ run-test: $(CERTIFICATE_FILE)
 	- @CONFIG_FILE=test/config.json DEBUG=true python server.py > server.log 2>&1 & echo $$! > server.pid
 	- @python test/simple_http_server.py > simple_http_server.log 2>&1 & echo $$! > simple_http_server.pid
 	@sleep 5  # 等待服务器启动
-	- @python test/test.py
+	- @python test/test.py; echo $$? > test_exit_code.tmp
 	@echo "Stopping servers..."
 	- @kill `cat server.pid` && rm server.pid
 	- @kill `cat simple_http_server.pid` && rm simple_http_server.pid
 	@echo "Test completed"
+	@EXIT_CODE=`cat test_exit_code.tmp`; rm test_exit_code.tmp; exit $$EXIT_CODE
 
 clean:
 	@echo "Cleaning up..."
