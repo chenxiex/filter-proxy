@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 import re
 import os
 import signal  # 添加signal模块导入
+import logging
 
 # 配置文件路径
 CONFIG_FILE = os.getenv('CONFIG_FILE', 'config.json')
@@ -40,14 +41,10 @@ FILTER_RULES = [
 ]
 
 # 用于调试的日志函数
-def debug_log(message):
-    """只在DEBUG模式下打印日志"""
-    if DEBUG:
-        print(f"[DEBUG] {message}")
-
-def info_log(message):
-    """始终打印的重要信息"""
-    print(f"[INFO] {message}")
+if DEBUG:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
 
 # 读取配置文件
 def load_config():
@@ -78,14 +75,14 @@ def load_config():
                                 rule['priority'] = int(rule['priority'])
                                 loaded_rules.append(rule)
                             except (re.error, ValueError) as e:
-                                debug_log(f"Invalid rule in config: {rule}, error: {str(e)}")
+                                logging.warning(f"Invalid rule in config: {rule}, error: {str(e)}")
                 
                 if loaded_rules:
-                    info_log(f"Loaded {len(loaded_rules)} filter rules from config file")
+                    logging.info(f"Loaded {len(loaded_rules)} filter rules from config file")
                     # 替换默认规则，但确保RPC服务器始终可访问
                     FILTER_RULES = loaded_rules
     except Exception as e:
-        info_log(f"Unexpected error loading config: {e}. Using default settings.")
+        logging.warning(f"Unexpected error loading config: {e}. Using default settings.")
 
 # 缓冲区大小
 BUFFER_SIZE = 8192
@@ -111,7 +108,7 @@ def should_filter_request(host, port):
     if FILTER_UNTIL > 0 and time.time() > FILTER_UNTIL:
         FILTER_ENABLED = False
         FILTER_UNTIL = 0
-        info_log("Packet filtering has expired. Resuming normal operation.")
+        logging.info("Packet filtering has expired. Resuming normal operation.")
         return False
     
     # 应用过滤规则，按优先级排序
@@ -158,11 +155,11 @@ def handle_http(client_socket, request, address):
     
     # 检查是否应该过滤（丢弃）该请求
     if should_filter_request(host, port):
-        debug_log(f"Filtering request from {address} to {host}:{port}")
+        logging.debug(f"Filtering request from {address} to {host}:{port}")
         client_socket.close()
         return
 
-    debug_log(f"Received {method} request for {url} from {address}, forwarding to {host}:{port}")
+    logging.debug(f"Received {method} request for {url} from {address}, forwarding to {host}:{port}")
      
     # 检查是否为回环请求
     if is_loopback_request(host, port):
@@ -206,7 +203,7 @@ def handle_http(client_socket, request, address):
     except Exception as e:
         try:
             error_msg = f"HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\n\r\nError: {str(e)}"
-            debug_log(f"Error: {str(e)}")
+            logging.debug(f"Error: {str(e)}")
             client_socket.send(error_msg.encode())
         except:
             pass
@@ -297,7 +294,7 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
                 FILTER_UNTIL = 0
                 message = "Filtering packets according to rules permanently"
                 
-            info_log(message)
+            logging.info(message)
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -308,7 +305,7 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
             FILTER_ENABLED = False
             FILTER_UNTIL = 0
             message = "Resumed normal proxy operation"
-            info_log(message)
+            logging.info(message)
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -385,7 +382,7 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
                 message = f"Added new rule: {rule_type.upper()} - Pattern: {host_pattern}, "
                 message += f"Port: {port if port != 0 else 'ALL'}, Priority: {priority}"
                 
-                info_log(message)
+                logging.info(message)
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain')
                 self.end_headers()
@@ -460,7 +457,7 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
                     message = "Error: Missing parameters. Use index or rule attributes (type, host, port, priority)"
                     self.send_response(400)
                     
-                info_log(message)
+                logging.info(message)
                 self.send_header('Content-type', 'text/plain')
                 self.end_headers()
                 self.wfile.write(message.encode())
@@ -491,16 +488,16 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
         
     def log_message(self, format, *args):
         # 使用自定义日志格式
-        debug_log(f"RPC: {self.client_address[0]} - {format % args}")
+        logging.debug(f"RPC: {self.client_address[0]} - {format % args}")
 
 # 启动RPC服务器
 def start_rpc_server():
     try:
         rpc_server = socketserver.ThreadingTCPServer((RPC_HOST, RPC_PORT), RPCHandler)
-        info_log(f"RPC server started on {RPC_HOST}:{RPC_PORT}")
+        logging.info(f"RPC server started on {RPC_HOST}:{RPC_PORT}")
         rpc_server.serve_forever()
     except Exception as e:
-        info_log(f"Error starting RPC server: {e}")
+        logging.error(f"Error starting RPC server: {e}")
 
 def main():
     server_socket = None
@@ -508,7 +505,7 @@ def main():
     
     # 添加信号处理
     def handle_sigterm(signum, frame):
-        info_log("Received SIGTERM signal. Server is shutting down...")
+        logging.info("Received SIGTERM signal. Server is shutting down...")
         if server_socket is not None:
             server_socket.close()
         os._exit(0)
@@ -528,7 +525,7 @@ def main():
         server_socket.bind((PROXY_HOST, PROXY_PORT))
         server_socket.listen(MAX_CONNECTIONS)
         
-        info_log(f"Proxy server started on {PROXY_HOST}:{PROXY_PORT}")
+        logging.info(f"Proxy server started on {PROXY_HOST}:{PROXY_PORT}")
         
         # 接受并处理客户端连接
         while True:
@@ -540,9 +537,9 @@ def main():
             client_thread.start()
             
     except KeyboardInterrupt:
-        info_log("Server is shutting down...")
-    except Exception:
-        pass
+        logging.info("Server is shutting down...")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
     finally:
         if server_socket is not None:
             server_socket.close()
