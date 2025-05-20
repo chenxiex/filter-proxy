@@ -182,6 +182,7 @@ def handle_http(client_socket, request, address):
             
             # 双向转发数据
             forward_data(client_socket, target_socket, host, port)
+
         else:  # HTTP请求
             # 替换请求中的绝对URL为相对URL
             parsed_url = urlparse(url)
@@ -205,8 +206,8 @@ def handle_http(client_socket, request, address):
             error_msg = f"HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\n\r\nError: {str(e)}"
             logging.debug(f"Error: {str(e)}")
             client_socket.send(error_msg.encode())
-        except:
-            pass
+        except Exception:
+            logging.warning("Error sending error response to client.")
         finally:
             client_socket.close()
             if target_socket is not None:
@@ -218,40 +219,45 @@ def forward_data(client_socket, target_socket, host=None, port=None):
     client_socket.setblocking(False)
     target_socket.setblocking(False)
     
-    while True:
-        # 检查是否应该过滤（丢弃）该连接
-        if host and port and should_filter_request(host, port):
-            client_socket.close()
-            target_socket.close()
-            return
-            
-        # 等待直到有套接字可读
-        read_sockets, _, error_sockets = select.select([client_socket, target_socket], [], [client_socket, target_socket], 30)
-        
-        if error_sockets:
-            break
-            
-        if not read_sockets:  # 超时
-            continue
-            
-        for sock in read_sockets:
-            try:
-                data = sock.recv(BUFFER_SIZE)
-                
-                if not data:  # 连接关闭
-                    return
-                    
-                # 确定目标套接字
-                if sock is client_socket:
-                    target_socket.send(data)
-                else:
-                    client_socket.send(data)
-            except:
+    try:
+        while True:
+            # 检查是否应该过滤（丢弃）该连接
+            if host and port and should_filter_request(host, port):
                 return
                 
-    # 关闭套接字
-    client_socket.close()
-    target_socket.close()
+            # 等待直到有套接字可读
+            read_sockets, _, error_sockets = select.select([client_socket, target_socket], [], [client_socket, target_socket], 30)
+            
+            if error_sockets:
+                logging.warning("Error occurred in sockets. Closing connections...")
+                break
+                
+            if not read_sockets:  # 超时
+                logging.warning("Timeout waiting for data. Retrying...")
+                continue
+                
+            for sock in read_sockets:
+                try:
+                    data = sock.recv(BUFFER_SIZE)
+                    
+                    if not data:  # 连接关闭
+                        logging.debug("Connection closed by peer.")
+                        return
+                        
+                    # 确定目标套接字
+                    if sock is client_socket:
+                        target_socket.send(data)
+                    else:
+                        client_socket.send(data)
+                except Exception as e:
+                    logging.warning(f"Error in data forwarding: {str(e)}")
+                    # 关闭套接字
+                    return
+
+    finally:            
+        # 关闭套接字
+        client_socket.close()
+        target_socket.close()
 
 # 处理客户端连接
 def handle_client(client_socket, address):
