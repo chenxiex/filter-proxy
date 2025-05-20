@@ -15,23 +15,16 @@ env:
   IMAGE_NAME: ${{ github.repository }}/devcontainer
 
 jobs:
-  build-and-push:
+  test:
     runs-on: ubuntu-latest
     permissions: 
       contents: read
-      packages: write
+      packages: read
 
     steps:
     - 
       name: Checkout
       uses: actions/checkout@v4
-    -
-      name: Login to GitHub Container Registry
-      uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     - 
       name: Run test in dev container image
       uses: devcontainers/ci@v0.3
