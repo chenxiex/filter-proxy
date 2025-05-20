@@ -9,7 +9,8 @@ install-all-packages:
 
 $(CERTIFICATE_FILE):
 	@echo "Generating test certificate..."
-	@yes "" | openssl req -newkey rsa:2048 -nodes -keyout test/test.key -x509 -days 365 -out test/test.crt
+	@yes "" | openssl req -newkey rsa:2048 -nodes -keyout test/test.key -x509 -days 365 -out test/test.crt > /dev/null 2>&1
+	@echo "Test certificate generated"
 
 run-test: $(CERTIFICATE_FILE)
 	@echo "Running tests..."
