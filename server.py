@@ -496,7 +496,7 @@ class RPCHandler(http.server.SimpleHTTPRequestHandler):
         # 使用自定义日志格式
         logging.debug(f"RPC: {self.client_address[0]} - {format % args}")
 
-# 创建全局变量以便在信号处理函数中访问RPC服务器
+# 创建全局变量以便在主线程中访问
 rpc_server = None
 
 # 启动RPC服务器
@@ -520,17 +520,18 @@ def main():
     # 添加信号处理
     def handle_sigterm(signum, frame):
         logging.info("Received SIGTERM signal. Server is shutting down...")
+        try:
         # 关闭主服务器
-        if server_socket is not None:
-            server_socket.close()
-        
-        # 关闭RPC服务器
-        if rpc_server is not None:
-            logging.info("Shutting down RPC server...")
-            rpc_server.shutdown()
-            rpc_server.server_close()
-            logging.info("RPC server shut down.")
-        
+            if server_socket is not None:
+                server_socket.close()
+            
+            # 关闭RPC服务器
+            if rpc_server is not None:
+                rpc_server.shutdown()
+                rpc_server.server_close()
+        except Exception as e:
+            logging.error(f"Error shutting down server: {e}")
+            
         logging.info("All servers shut down. Exiting...")
         os._exit(0)
     
@@ -561,12 +562,21 @@ def main():
             client_thread.start()
             
     except KeyboardInterrupt:
-        logging.info("Server is shutting down...")
+        pass
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     finally:
-        if server_socket is not None:
-            server_socket.close()
+        logging.info("Shutting down server...")
+        try:
+            if server_socket is not None:
+                server_socket.close()
+            
+            if rpc_server is not None:
+                rpc_server.shutdown()
+                rpc_server.server_close()
+            logging.info("Server shut down.")
+        except Exception as e:
+            logging.error(f"Error shutting down server: {e}")
 
 if __name__ == "__main__":
     main()
