@@ -155,3 +155,58 @@ GET /remove_rule?type=TYPE&host=PATTERN&port=PORT&priority=PRIORITY
 - 建议允许访问RPC端口（默认22224），否则在启用过滤后将无法控制代理
 - 小心使用高优先级的deny规则，它们可能会意外阻止重要连接
 - 在生产环境中，建议设置RPC服务器的访问控制，以防止未授权访问
+
+## Bonus
+这个软件开发的初衷是为了在 Linux 上运行米家游戏时方便地断网启动。例如，以下是一个用于启动米家游戏的配置文件：
+```json
+{
+  "proxy_host": "0.0.0.0",
+  "proxy_port": 22223,
+  "rpc_host": "0.0.0.0",
+  "rpc_port": 22224,
+  "max_connections": 1024,
+  "filter_rules": [
+    {
+      "type": "allow",
+      "host_pattern": "(localhost|127\\.0\\.0\\.1)",
+      "port": 22224,
+      "priority": 100,
+      "description": "允许访问RPC服务器，移除该过滤规则可能导致过滤开启后无法关闭"
+    },
+    {
+      "type": "deny",
+      "host_pattern": "dispatchcnglobal\\.yuanshen\\.com",
+      "port": 0,
+      "priority": 30,
+      "description": "gi"
+    },
+    {
+      "type": "deny",
+      "host_pattern": "globaldp-prod-cn01\\.juequling\\.com",
+      "port": 0,
+      "priority": 20,
+      "description": "zzz"
+    },
+    {
+      "type": "deny",
+      "host_pattern": "globaldp-prod-cn01\\.bhsr\\.com",
+      "port": 0,
+      "priority": 10,
+      "description": "hsr"
+    },
+	{
+      "type": "allow",
+      "host_pattern": ".*",
+      "port": 0,
+      "priority": 0,
+      "description": "默认规则：允许所有其他请求"
+    }
+  ]
+}
+```
+使用该配置文件启动 filter-proxy 后，通过设置 `HTTP_PROXY=http://localhost:22223` 和 `HTTPS_PROXY=http://localhost:22223` 环境变量为游戏设置代理。然后，在游戏启动前执行脚本：
+```bash
+#!/bin/bash
+curl http://localhost:22224/filter?seconds=20
+```
+注意调整断网时间。然后就可以享受游戏了！
