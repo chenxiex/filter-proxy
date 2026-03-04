@@ -35,7 +35,7 @@ FILTER_UNTIL = 0  # 0表示永久，其他值表示时间戳
 # priority: 优先级，数字越大优先级越高
 FILTER_RULES = [
     # 默认规则：允许访问RPC服务器
-    {"type": "allow", "host_pattern": r"(localhost|127\.0\.0\.1)", "port": RPC_PORT, "priority": 100},
+    {"type": "allow", "host_pattern": r"(localhost|127\.0\.0\.1|::1)", "port": RPC_PORT, "priority": 100},
     # 默认规则：当过滤开启时，丢弃所有其它请求
     {"type": "deny", "host_pattern": r".*", "port": 0, "priority": 0}
 ]
@@ -87,10 +87,58 @@ def load_config():
 # 缓冲区大小
 BUFFER_SIZE = 8192
 
+
+def create_dual_stack_socket(bind_host, bind_port):
+    """创建双栈监听socket（优先IPv6双栈，失败回退IPv4）"""
+    host_for_v6 = '::' if bind_host == '0.0.0.0' else bind_host
+
+    try:
+        server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (AttributeError, OSError):
+            pass
+        server_socket.bind((host_for_v6, bind_port))
+        return server_socket, f"[{host_for_v6}]:{bind_port}"
+    except OSError:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((bind_host, bind_port))
+        return server_socket, f"{bind_host}:{bind_port}"
+
+
+def parse_connect_target(url):
+    """解析CONNECT目标，支持 host:port 和 [ipv6]:port"""
+    target = url.strip()
+
+    if target.startswith('['):
+        end_index = target.find(']')
+        if end_index == -1:
+            return target, 443
+        host = target[1:end_index]
+        remainder = target[end_index + 1:]
+        if remainder.startswith(':') and len(remainder) > 1:
+            try:
+                return host, int(remainder[1:])
+            except ValueError:
+                return host, 443
+        return host, 443
+
+    host_part, sep, port_part = target.rpartition(':')
+    if sep and host_part and ':' not in host_part:
+        try:
+            return host_part, int(port_part)
+        except ValueError:
+            return host_part, 443
+
+    return target, 443
+
 # 检测回环请求的函数
 def is_loopback_request(host, port):
     """检查请求是否是回环请求(访问代理服务器自身)"""
-    if host == 'localhost' or host == '127.0.0.1' or host == PROXY_HOST:
+    normalized_host = host[1:-1] if host.startswith('[') and host.endswith(']') else host
+    if normalized_host == 'localhost' or normalized_host == '127.0.0.1' or normalized_host == '::1' or normalized_host == PROXY_HOST:
         if port == PROXY_PORT:
             return True
     return False
@@ -140,18 +188,11 @@ def handle_http(client_socket, request, address):
 
     if method == 'CONNECT':
         # 处理HTTPS请求
-        host = url.split(':', 1)[0]
-        port = int(url.split(':', 1)[1]) if ':' in url else 443
+        host, port = parse_connect_target(url)
     else:
         parsed_url = urlparse(url)
-        host = parsed_url.netloc
-        
-        # 如果没有指定端口，根据协议设置默认端口
-        if ':' in host:
-            host, port = host.split(':', 1)
-            port = int(port)
-        else:
-            port = 80
+        host = parsed_url.hostname or ''
+        port = parsed_url.port if parsed_url.port else 80
     
     # 检查是否应该过滤（丢弃）该请求
     if should_filter_request(host, port):
@@ -172,8 +213,7 @@ def handle_http(client_socket, request, address):
         
     try:
         # 创建到目标服务器的连接
-        target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        target_socket.connect((host, port))
+        target_socket = socket.create_connection((host, port))
         
         # 转发请求到目标服务器
         if method == 'CONNECT':  # HTTPS请求
@@ -505,9 +545,27 @@ def start_rpc_server():
     try:
         class ReusableAddressServer(socketserver.ThreadingTCPServer):
             allow_reuse_address = True
-        rpc_server = ReusableAddressServer((RPC_HOST, RPC_PORT), RPCHandler)
+
+        class ReusableAddressServerV6(ReusableAddressServer):
+            address_family = socket.AF_INET6
+
+            def server_bind(self):
+                try:
+                    self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                except (AttributeError, OSError):
+                    pass
+                super().server_bind()
+
+        host_for_v6 = '::' if RPC_HOST == '0.0.0.0' else RPC_HOST
+        try:
+            rpc_server = ReusableAddressServerV6((host_for_v6, RPC_PORT), RPCHandler)
+            rpc_bind_display = f"[{host_for_v6}]:{RPC_PORT}"
+        except OSError:
+            rpc_server = ReusableAddressServer((RPC_HOST, RPC_PORT), RPCHandler)
+            rpc_bind_display = f"{RPC_HOST}:{RPC_PORT}"
+
         rpc_server.daemon_threads = True
-        logging.info(f"RPC server started on {RPC_HOST}:{RPC_PORT}")
+        logging.info(f"RPC server started on {rpc_bind_display}")
         rpc_server.serve_forever()
     except Exception as e:
         logging.error(f"Error starting RPC server: {e}")
@@ -545,12 +603,10 @@ def main():
         rpc_thread.start()
         
         # 创建服务器套接字
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((PROXY_HOST, PROXY_PORT))
+        server_socket, proxy_bind_display = create_dual_stack_socket(PROXY_HOST, PROXY_PORT)
         server_socket.listen(MAX_CONNECTIONS)
         
-        logging.info(f"Proxy server started on {PROXY_HOST}:{PROXY_PORT}")
+        logging.info(f"Proxy server started on {proxy_bind_display}")
         
         # 接受并处理客户端连接
         while True:
